@@ -1,0 +1,12 @@
+# Output Directories
+x64/
+Debug/
+Release/
+
+# Database
+*.sdf
+*.opensdf
+
+# User Options
+*.suo
+*.user
