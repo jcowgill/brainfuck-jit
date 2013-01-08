@@ -1,7 +1,7 @@
 #include "BfCompiler.h"
 #include <istream>
+#include <iostream>
 #include <cstdint>
-#include <cstdio>
 #include <stack>
 
 using namespace std;
@@ -122,15 +122,15 @@ public:
 //Callback functions used in code
 static void __fastcall outputCallback(int c)
 {
-    putchar(c);
+    cout.put(static_cast<char>(c));
 }
 
 static int __fastcall inputCallback(int eofCode)
 {
-    int result = getchar();
+    int result = cin.get();
 
     //Patch eofCode
-    if(result == EOF)
+    if(cin.eof())
         result = eofCode;
 
     return result;
