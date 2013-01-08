@@ -28,7 +28,7 @@ namespace bf
     void compile(std::istream& input, void * outputCode, void * heap, std::uint32_t cellSize, EofCode eofCode);
 
     // See above
-    //  Defaults to cell size of 1, and an eof code of 0
+    //  Defaults to cell size of 1, and an eof code of -1
     void compile(std::istream& input, void * outputCode, void * heap, std::uint32_t cellSize = 1);
 }
 

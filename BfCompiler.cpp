@@ -117,6 +117,18 @@ public:
         putInt(outPtr_, number);
         outPtr_ += 4;
     }
+
+    //Puts a relative pointer
+    static void putRelInt(uint8_t * outPtr, void * otherPtr)
+    {
+        putInt(outPtr,  -(outPtr - otherPtr) - 4);
+    }
+
+    void putRelInt(void * ptr)
+    {
+        putRelInt(outPtr_, ptr);
+        outPtr_ += 4;
+    }
 };
 
 //Callback functions used in code
@@ -134,12 +146,6 @@ static int __fastcall inputCallback(int eofCode)
         result = eofCode;
 
     return result;
-}
-
-//Returns true if the given character is bufferable
-static bool bufferable(int c)
-{
-    return c == '+' || c == '-' || c == '<' || c == '>';
 }
 
 //Writes the prolog for the program
@@ -292,12 +298,11 @@ static void processChar(OutBuffer& out, int c, uint32_t number = 1)
             uint8_t * fixupAddr = out.popAddress();
 
             // Ignore loop mismatch
-#pragma message("Do we want to do this?")
             if(fixupAddr == NULL)
                 break;
 
             // Fix address to jump to current location
-            OutBuffer::putInt(fixupAddr, out.getCurrentAddress() - fixupAddr);
+            OutBuffer::putRelInt(fixupAddr, out.getCurrentAddress());
 
             // Write loop end
             if(cellSize == 1)
@@ -308,7 +313,7 @@ static void processChar(OutBuffer& out, int c, uint32_t number = 1)
                 out.put(0x83, 0x3B, 0x00);        // cmp word [ebx], 0
 
             out.put(0x0F, 0x85);            // jnz near <location>
-            out.putInt(out.getCurrentAddress() - (fixupAddr + 4));
+            out.putRelInt(fixupAddr + 4);
             break;
         }
 
@@ -323,7 +328,7 @@ static void processChar(OutBuffer& out, int c, uint32_t number = 1)
 
         // Call outputCallback
         out.put(0xE8);                  // call near <location>
-        out.putInt(out.getCurrentAddress() - reinterpret_cast<uint8_t *>(outputCallback));
+        out.putRelInt(outputCallback);
         break;
 
     case ',':
@@ -343,7 +348,7 @@ static void processChar(OutBuffer& out, int c, uint32_t number = 1)
 
             // Call inputCallback
             out.put(0xE8);                  // call near <location>
-            out.putInt(out.getCurrentAddress() - reinterpret_cast<uint8_t *>(inputCallback));
+            out.putRelInt(inputCallback);
 
             // Skip store if we're using ignore EOF
             if(!eofCode.modifyValue)
@@ -369,15 +374,58 @@ static void processChar(OutBuffer& out, int c, uint32_t number = 1)
     }
 }
 
+//Type of data being buffered
+#define BUFFER_NONE     0
+#define BUFFER_VALUE    1
+#define BUFFER_POINTER  2
+
+//Processes the current buffered characters
+void processBuffer(OutBuffer& out, uint32_t& bufferType, int32_t& bufferNumber,
+                   uint32_t newType = BUFFER_NONE, int32_t newNumber = 0)
+{
+    //Flush buffer?
+    if(bufferType != BUFFER_NONE && bufferType != newType && bufferNumber != 0)
+    {
+        //Get correct character and number
+        char properChar;
+        uint32_t properNumber;
+
+        if(bufferNumber >= 0)
+        {
+            properNumber = bufferNumber;
+            properChar = bufferType == BUFFER_VALUE ? '+' : '>';
+        }
+        else
+        {
+            properNumber = -bufferNumber;
+            properChar = bufferType == BUFFER_VALUE ? '-' : '<';
+        }
+
+        //Process it
+        processChar(out, properChar, properNumber);
+
+        //Reset bufferNumber
+        bufferNumber = newNumber;
+    }
+    else
+    {
+        //Update bufferNumber
+        bufferNumber += newNumber;
+    }
+
+    //Update bufferType
+    bufferType = newType;
+}
+
 void bf::compile(istream& input, void * outputCode, void * heap, uint32_t cellSize, EofCode eofCode)
 {
     //Create buffer and write prolog
-    OutBuffer out = OutBuffer(static_cast<uint8_t *>(outputCode), cellSize, eofCode);
+    OutBuffer out(static_cast<uint8_t *>(outputCode), cellSize, eofCode);
     writeProlog(out, heap);
 
     //Process input
-    int bufferedChar = -1;
-    uint32_t bufferedTimes = 0;
+    uint32_t bufferType = BUFFER_NONE;
+    int32_t bufferNumber = 0;
 
     for(;;)
     {
@@ -387,31 +435,33 @@ void bf::compile(istream& input, void * outputCode, void * heap, uint32_t cellSi
         if(!input)
             break;
 
-        //Same as buffered char?
-        if(c == bufferedChar)
+        //What is it?
+        switch(c)
         {
-            //Add 1 to occurences
-            bufferedTimes++;
-        }
-        else
-        {
-            //Process buffered character
-            processChar(out, bufferedChar, bufferedTimes);
+        case '+':
+            processBuffer(out, bufferType, bufferNumber, BUFFER_VALUE, 1);
+            break;
 
-            //Is this character bufferable?
-            if(bufferable(c))
-            {
-                //Buffer it
-                bufferedTimes = 1;
-                bufferedChar = c;
-            }
-            else
-            {
-                //Erase buffer and process now
-                bufferedTimes = 0;
-                bufferedChar = -1;
-                processChar(out, c);
-            }
+        case '-':
+            processBuffer(out, bufferType, bufferNumber, BUFFER_VALUE, -1);
+            break;
+
+        case '>':
+            processBuffer(out, bufferType, bufferNumber, BUFFER_POINTER, 1);
+            break;
+
+        case '<':
+            processBuffer(out, bufferType, bufferNumber, BUFFER_POINTER, -1);
+            break;
+
+        case '[':
+        case ']':
+        case '.':
+        case ',':
+            //Ignore buffer and process directly
+            processBuffer(out, bufferType, bufferNumber);
+            processChar(out, c);
+            break;
         }
     }
 
@@ -424,6 +474,6 @@ void bf::compile(istream& input, void * outputCode, void * heap, uint32_t cellSi
 void bf::compile(istream& input, void * outputCode, void * heap, uint32_t cellSize /* = 1 */)
 {
     //Forward to other function
-    EofCode zeroCode = { true, 0 };
+    EofCode zeroCode = { true, -1 };
     compile(input, outputCode, heap, cellSize, zeroCode);
 }
