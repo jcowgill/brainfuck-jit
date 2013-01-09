@@ -6,7 +6,7 @@
 bf::CompilerState::CompilerState(void * output, std::size_t outputSize, void * heap,
     unsigned char cellSize, EofCode eofCode)
     : output_(reinterpret_cast<uint8_t *>(output)), outputSize_(outputSize),
-        heap_(heap), cellSize_(cellSize), eofCode_(eofCode)
+        heap_(heap), cellSize_(cellSize), eofCode_(eofCode), pos_(0), failed_(false)
 {
 }
 

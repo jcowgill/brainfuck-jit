@@ -316,10 +316,10 @@ CompileResult bf::compile(std::istream& input, CompilerState& out)
             //Test for immediate failiures
             if(out.failed())
                 return OUT_OF_OUTPUT_SPACE;
-            else if(input.fail())
-                return IO_ERROR;
             else if(input.eof())
                 break;
+            else if(input.fail())
+                return IO_ERROR;
 
             //What is it?
             switch(c)

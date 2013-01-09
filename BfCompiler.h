@@ -21,6 +21,7 @@ namespace bf
 
         // Creates a new EofCode which DOES NOT produce a value
         EofCode()
+            : modifyValue(false), code(0)
         {
         }
 
