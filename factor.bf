@@ -1,4 +1,4 @@
-From http://www.muppetlabs.com/~breadbox/bf/factor.b.txt
+From http://www muppetlabs com/~breadbox/bf/factor b txt
 
 * factor an arbitrarily large positive integer
 *
