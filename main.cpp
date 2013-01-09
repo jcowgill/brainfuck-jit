@@ -1,25 +1,28 @@
 #include "BfCompiler.h"
 #include <fstream>
+#include <iostream>
+#include <Windows.h>
 
 int main(void)
 {
     //Test stuff
-    std::ifstream input = std::ifstream("input.bf");
-    std::ofstream output = std::ofstream("output.raw", std::ios::out | std::ios::trunc || std::ios::binary);
+    std::ifstream input("input.bf", std::ios::in);
+    std::ofstream output("output.raw", std::ios::out | std::ios::trunc | std::ios::binary);
 
     //Do the test compile
-    char * rawMem = new char[0x10000]();
-    bf::compile(input, rawMem, (void *) 0xDEADBEEF);
+    char * rawMem = (char *) VirtualAlloc(NULL, 0x10000, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    char * heap = new char[0x10000]();
 
-    //Find end of compiled code
-    int lastValidByte = 0xFFFF;
-    for(; lastValidByte >= 0; lastValidByte--)
-    {
-        //Non 0?
-        if(rawMem[lastValidByte] != 0)
-            break;
-    }
+    bf::CompilerState state(rawMem, 0x10000, heap);
+    bf::compile(input, state);
 
     //Write to output (until 10 consecutive nulls are found)
-    output.write(rawMem, lastValidByte + 1);
+    output.write(rawMem, state.getPosition());
+
+    //Execute code
+    reinterpret_cast<void (*)()>(rawMem)();
+
+    //Free memory
+    delete [] heap;
+    VirtualFree(rawMem, 0, MEM_RELEASE);
 }
